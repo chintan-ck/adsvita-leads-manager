@@ -1162,9 +1162,7 @@ async function doCompose(){
     out.style.color='var(--tx)';out.textContent=txt;
   }catch(e){
     out.style.color='var(--hot)';
-    out.textContent='Error generating message: '+e.message+'
-
-Please check your internet connection and try again.';
+    out.textContent='Error generating message: '+e.message+'. Please check your internet connection and try again.';
   }
   if(btn){btn.disabled=false;btn.textContent='✦ Generate';}
 }

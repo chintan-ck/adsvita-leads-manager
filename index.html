@@ -514,7 +514,7 @@ function leadsHTML(){
         '<option value="lost"'+(S.fs==='lost'?' selected':'')+'>Lost</option>'+
       '</select>'+
     '</div>'+
-    '<div class="ll">'+(f.length?f.map(lcard).join(''):'<div class="emp">No leads match</div>')+'</div>'+
+    '<div class="ll" id="leads-list-body">'+(f.length?f.map(lcard).join(''):'<div class="emp">No leads match</div>')+'</div>'+
     '</div>';
 }
 
@@ -1273,26 +1273,22 @@ async function setSt(id,stage){
 // ── SEARCH DEBOUNCE ──────────────────────────────────────────────────────────
 var searchTimer=null;
 function debSearch(val){
-  clearTimeout(searchTimer);
-  searchTimer=setTimeout(function(){
-    S.q=val;
-    // Only re-render the leads list, not the whole page
-    var f=S.leads;
-    if(S.q)f=f.filter(function(l){return Object.values(l).join(' ').toLowerCase().includes(S.q.toLowerCase());});
-    if(S.fs)f=f.filter(function(l){return l.stage===S.fs;});
-    var ll=document.querySelector('.ll');
-    if(ll)ll.innerHTML=f.length?f.map(lcard).join(''):'<div class="emp">No leads match</div>';
-    // Update count in topbar
-    var tb=document.querySelector('.tb-t');
-    if(tb&&tb.textContent.startsWith('All Leads'))tb.textContent='All Leads ('+f.length+')';
-  },300);
+  // Instant DOM update - no render() call at all
+  S.q=val;
+  var f=S.leads;
+  if(val)f=f.filter(function(l){
+    var haystack=(l.company||'')+(l.contact||'')+(l.mobile||'')+(l.email||'')+(l.lastNote||'')+(l.status2526||'')+(l.nextAction||'');
+    return haystack.toLowerCase().includes(val.toLowerCase());
+  });
+  if(S.fs)f=f.filter(function(l){return l.stage===S.fs;});
+  var ll=document.getElementById('leads-list-body');
+  if(ll)ll.innerHTML=f.length?f.map(lcard).join(''):'<div class="emp">No leads match</div>';
+  var tb=document.querySelector('.tb-t');
+  if(tb&&tb.textContent.indexOf('All Leads')===0)tb.textContent='All Leads ('+f.length+')';
 }
 function debSearchNav(val){
-  clearTimeout(searchTimer);
-  searchTimer=setTimeout(function(){
-    S.q=val;
-    nav('leads');
-  },400);
+  S.q=val;
+  nav('leads');
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────

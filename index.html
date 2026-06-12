@@ -319,7 +319,20 @@ function scCol(s){return s>=70?'#16A34A':s>=45?'#F99D1C':'#D94F2B';}
 function toast(msg,t){var c=document.getElementById('toasts');var el=document.createElement('div');el.className='tst '+(t==='ok'?'ok':t==='err'?'err':'');el.textContent=msg;c.appendChild(el);setTimeout(function(){el.remove();},3500);}
 function nav(v,lead){S.prev=S.view;S.view=v;if(lead!==undefined)S.sel=lead;render();var m=document.querySelector('.main');if(m)m.scrollTo(0,0);}
 function syncD(s){var d=document.getElementById('sdot'),t=document.getElementById('stxt');if(!d||!t)return;d.className='sd'+(s==='err'?' err':s==='loading'?' loading':'');t.textContent=s==='ok'?'Synced':s==='loading'?'Syncing...':'Error';}
-async function callAI(p){var r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:p}]})});var d=await r.json();return d.content&&d.content[0]&&d.content[0].text||'';}
+async function callAI(p){
+  var r=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:p}]})
+  });
+  if(!r.ok){
+    var err=await r.json().catch(function(){return {};});
+    throw new Error(err.error&&err.error.message?err.error.message:'API error '+r.status);
+  }
+  var d=await r.json();
+  if(d.error)throw new Error(d.error.message||'API error');
+  return d.content&&d.content[0]&&d.content[0].text||'';
+}
 function getNF(){return S.fields.find(function(f){return f.key==='status2526';})||S.fields.find(function(f){return f.key==='lastNote';})||S.fields[S.fields.length-1];}
 function getCF(){return S.fields.find(function(f){return f.key==='company';})||S.fields.find(function(f){return f.required;})||S.fields[0];}
 function getSF(){return S.fields.find(function(f){return f.key==='stage';});}
@@ -451,6 +464,10 @@ function dashHTML(){
     '<button class="btn bg bs" onclick="loadAll()">&#x21BA;</button>'+
     '</div></div>'+
     '<div style="padding:24px">'+alert+
+    '<div style="display:flex;gap:8px;margin-bottom:20px">'+
+      '<input class="si" placeholder="Quick search — company, contact, mobile..." style="max-width:500px" value="'+esc(S.q)+'" oninput="debSearchNav(this.value)"/>'+
+      (S.q?'<button class="btn bg bs" onclick="S.q=\'\';render()">&#x2715; Clear</button>':'')+
+    '</div>'+
     '<div class="mg">'+
       '<div class="mc"><div class="ml">Total</div><div class="mv">'+S.leads.length+'</div><div class="ms">All leads</div></div>'+
       '<div class="mc"><div class="ml">Active</div><div class="mv ca">'+active.length+'</div><div class="ms">In pipeline</div></div>'+
@@ -487,7 +504,7 @@ function leadsHTML(){
     '</div></div>'+
     '<div style="padding:24px">'+
     '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">'+
-      '<input class="si" placeholder="Search..." value="'+esc(S.q)+'" oninput="S.q=this.value;render()"/>'+
+      '<input class="si" id="search-input" placeholder="Search by company, contact, mobile, notes..." value="'+esc(S.q)+'" oninput="debSearch(this.value)"/>'+
       '<select class="fsel" onchange="S.fs=this.value;render()">'+
         '<option value="">All stages</option>'+
         '<option value="hot"'+(S.fs==='hot'?' selected':'')+'>Hot</option>'+
@@ -1088,8 +1105,11 @@ function clearLogo(){
 // ── AI ─────────────────────────────────────────────────────────────────────────
 async function loadAISum(lead){
   var el=document.getElementById('aib');if(!el)return;
+  var panel=document.getElementById('aib-panel');
   var key='ai_'+lead.id+'_'+(lead.updatedAt||'');
-  if(S.cache[key]){el.className='aib';el.innerHTML=S.cache[key];return;}
+  if(S.cache[key]){if(panel)panel.style.display='';el.className='aib';el.innerHTML=S.cache[key];return;}
+  if(panel)panel.style.display='';
+  el.className='aib loading';el.innerHTML='<span class="sp"></span> Analysing...';
   try{
     var cf=getCF();var nf=getNF();
     var txt=await callAI('B2B sales assistant, Adsvita Communique India (annual reports, SR, ESG, BRSR). Analyse this lead. 4 bullets using -:\n- Status\n- Quality\n- Best next action\n- Key risk\nMax 20 words each.\n\nCompany: '+lead[cf?cf.key:'company']+'\nContact: '+(lead.contact||'?')+'\nStage: '+(lead.stage||'')+'\nNotes: '+(lead[nf?nf.key:'lastNote']||'none'));
@@ -1098,7 +1118,8 @@ async function loadAISum(lead){
 }
 async function genOut(id){
   var lead=S.leads.find(function(l){return l.id===id;});if(!lead)return;
-  var p=document.getElementById('aio'),b=document.getElementById('aiob');if(!p||!b)return;
+  var p=document.getElementById('aio'),b=document.getElementById('aiob');
+  if(!p||!b){toast('Open a lead first to draft outreach','err');return;}
   p.style.display='';b.innerHTML='<span class="sp"></span> Drafting...';b.className='aib loading';
   try{
     var cf=getCF();var nf=getNF();
@@ -1162,7 +1183,14 @@ async function doCompose(){
     out.style.color='var(--tx)';out.textContent=txt;
   }catch(e){
     out.style.color='var(--hot)';
-    out.textContent='Error generating message: '+e.message+'. Please check your internet connection and try again.';
+    var errMsg=e.message||'Unknown error';
+    if(errMsg.includes('401')||errMsg.includes('auth')){
+      out.textContent='Authentication error. The AI service key may have expired. Please contact admin.';
+    }else if(errMsg.includes('network')||errMsg.includes('fetch')){
+      out.textContent='Network error. Please check your internet connection and try again.';
+    }else{
+      out.textContent='Error: '+errMsg;
+    }
   }
   if(btn){btn.disabled=false;btn.textContent='✦ Generate';}
 }
@@ -1240,6 +1268,31 @@ async function setSt(id,stage){
   var sf=getSF();if(!sf)return;
   var upd=Object.assign({},lead,{updatedAt:new Date().toISOString()});upd[sf.key]=stage;upd.stage=stage;
   var ok=await saveLead(upd,false);if(ok){S.sel=upd;nav('detail',upd);}
+}
+
+// ── SEARCH DEBOUNCE ──────────────────────────────────────────────────────────
+var searchTimer=null;
+function debSearch(val){
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(function(){
+    S.q=val;
+    // Only re-render the leads list, not the whole page
+    var f=S.leads;
+    if(S.q)f=f.filter(function(l){return Object.values(l).join(' ').toLowerCase().includes(S.q.toLowerCase());});
+    if(S.fs)f=f.filter(function(l){return l.stage===S.fs;});
+    var ll=document.querySelector('.ll');
+    if(ll)ll.innerHTML=f.length?f.map(lcard).join(''):'<div class="emp">No leads match</div>';
+    // Update count in topbar
+    var tb=document.querySelector('.tb-t');
+    if(tb&&tb.textContent.startsWith('All Leads'))tb.textContent='All Leads ('+f.length+')';
+  },300);
+}
+function debSearchNav(val){
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(function(){
+    S.q=val;
+    nav('leads');
+  },400);
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────

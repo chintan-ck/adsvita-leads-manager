@@ -431,7 +431,8 @@ function lcard(lead){
   var note=lead[nf?nf.key:'lastNote']||'No notes yet.';
   var remBadge=rem?'<span style="font-size:10px;font-weight:600;color:'+rem.color+';font-family:var(--mo)">'+rem.label+'</span>':'';
   var catBadge=lead.category?'<span class="bdg ba" style="font-size:10px">'+esc(lead.category)+'</span>':'';
-  return '<div class="lc '+info.c+'" onclick="nav(\'detail\',S.leads.find(function(l){return l.id===\''+lead.id+'\';}))">'+
+  var srch=((lead.company||'')+(lead.contact||'')+(lead.mobile||'')+(lead.email||'')+(lead.designation||'')+(lead.lastNote||'')+(lead.status2526||'')+(lead.nextAction||'')+(lead.responsibility||'')).toLowerCase();
+  return '<div class="lc '+info.c+'" data-search="'+srch+'" onclick="nav(\'detail\',S.leads.find(function(l){return l.id===\''+lead.id+'\';}))">'+
     '<div class="lt">'+
       '<div><div class="lco">'+esc(lead[cf?cf.key:'company']||'')+'</div>'+
       '<div class="lct">'+esc(lead.contact||'')+(lead.designation?' &middot; '+esc(lead.designation):'')+'</div></div>'+
@@ -514,7 +515,8 @@ function leadsHTML(){
         '<option value="lost"'+(S.fs==='lost'?' selected':'')+'>Lost</option>'+
       '</select>'+
     '</div>'+
-    '<div class="ll" id="leads-list-body">'+(f.length?f.map(lcard).join(''):'<div class="emp">No leads match</div>')+'</div>'+
+    '<div class="ll" id="leads-list-body">'+f.map(lcard).join('')+'</div>'+
+    '<div id="leads-empty" class="emp" style="display:none">No leads match</div>'+
     '</div>';
 }
 
@@ -1273,18 +1275,20 @@ async function setSt(id,stage){
 // ── SEARCH DEBOUNCE ──────────────────────────────────────────────────────────
 var searchTimer=null;
 function debSearch(val){
-  // Instant DOM update - no render() call at all
   S.q=val;
-  var f=S.leads;
-  if(val)f=f.filter(function(l){
-    var haystack=(l.company||'')+(l.contact||'')+(l.mobile||'')+(l.email||'')+(l.lastNote||'')+(l.status2526||'')+(l.nextAction||'');
-    return haystack.toLowerCase().includes(val.toLowerCase());
+  var q=val.toLowerCase();
+  var cards=document.querySelectorAll('#leads-list-body .lc');
+  var visible=0;
+  cards.forEach(function(card){
+    var text=card.getAttribute('data-search')||'';
+    var show=!q||text.includes(q);
+    card.style.display=show?'':'none';
+    if(show)visible++;
   });
-  if(S.fs)f=f.filter(function(l){return l.stage===S.fs;});
-  var ll=document.getElementById('leads-list-body');
-  if(ll)ll.innerHTML=f.length?f.map(lcard).join(''):'<div class="emp">No leads match</div>';
   var tb=document.querySelector('.tb-t');
-  if(tb&&tb.textContent.indexOf('All Leads')===0)tb.textContent='All Leads ('+f.length+')';
+  if(tb&&tb.textContent.indexOf('All Leads')===0)tb.textContent='All Leads ('+visible+')';
+  var empty=document.getElementById('leads-empty');
+  if(empty)empty.style.display=visible===0?'':'none';
 }
 function debSearchNav(val){
   S.q=val;

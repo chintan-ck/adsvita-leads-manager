@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Adsvita Lead Manager</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" onerror="console.warn('XLSX not loaded - import/export disabled')"></script>
 <style>
 :root{
   --bg:#F5F7FA;--sf:#fff;--sf2:#F0F3F8;--sf3:#E3EAF4;
@@ -1245,11 +1245,19 @@ async function setSt(id,stage){
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-try{var _s=localStorage.getItem(KS);if(_s)S.creds=JSON.parse(atob(_s));}catch(e){localStorage.removeItem(KS);}
-try{var _u=localStorage.getItem(US);if(_u)S.user=JSON.parse(_u);}catch(e){}
-render();
-if(S.creds&&S.user){S.loading=true;render();loadAll();}
-else if(S.creds&&!S.user){render();}
+function init(){
+  try{var _s=localStorage.getItem(KS);if(_s)S.creds=JSON.parse(atob(_s));}catch(e){localStorage.removeItem(KS);}
+  try{var _u=localStorage.getItem(US);if(_u)S.user=JSON.parse(_u);}catch(e){}
+  render();
+  if(S.creds&&S.user){S.loading=true;render();loadAll();}
+  else if(S.creds&&!S.user){render();}
+}
+// Run when DOM is ready
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',init);
+}else{
+  init();
+}
 </script>
 </body>
 </html>
